@@ -104,6 +104,7 @@ const Status BufMgr::allocBuf(int& frame) {
         tmpbuf->refbit = false;
     }
 
+    cout << "pins: " << numPins << "bufs: " << numBufs << "\n";
     // Checking if all pages are pinned
     if (numPins >= numBufs) {
         return BUFFEREXCEEDED;
@@ -159,7 +160,7 @@ const Status BufMgr::readPage(File* file, const int PageNo, Page*& page) {
     // Checking whether page is already in buffer pool
     int frameno;
     rc = hashTable->lookup(file, PageNo, frameno);
-    if (rc != OK || rc != HASHNOTFOUND) {
+    if (rc != OK && rc != HASHNOTFOUND) {
         return rc;
     }
 
