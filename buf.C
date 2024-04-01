@@ -75,60 +75,65 @@ BufMgr::~BufMgr() {
  * @return Status BUFFEREXCEEDED if all buffer frames are pinned, UNIXERR if an error
  *         occurred during disk I/O, and OK otherwise.
  */
-const Status BufMgr::allocBuf(int& frame) {
-    BufDesc* tmpbuf;
+
+
+/**
+ * @brief Allocates a free buffer frame using the clock algorithm.
+ *
+ * This method allocates a free buffer frame using the clock algorithm. If necessary,
+ * it writes a dirty page back to disk before allocating the frame.
+ *
+ * If the buffer frame allocated has a valid page in it, the appropriate
+ * entry is removed from the hash table.
+ *
+ * @param[out] frame An integer reference parameter where the index of the allocated
+ *                   buffer frame will be stored.
+ * @return Status BUFFEREXCEEDED if all buffer frames are pinned, UNIXERR if an error
+ *         occurred during disk I/O, and OK otherwise.
+ */
+const Status BufMgr::allocBuf(int & frame) {
+
+    BufDesc* tmpbuf = 0;
+    // int temp_frameno;
     Status rc;
     int numPins = 0;
 
     // Looping to find replacable frame unless all pages are pinned
     while (numPins < numBufs) {
-        // Increment clock ptr.
-        clockHand = (clockHand + 1) % numBufs;
+        clockHand = (clockHand + 1) % numBufs; // advance clock
         tmpbuf = &bufTable[clockHand];
 
         // Checking valid bit
-        if (!tmpbuf->valid) {
-            break;
-        }
-
-        // Checking refBit
-        if (!tmpbuf->refbit) {
-            // Checking pins
-            if (tmpbuf->pinCnt == 0) {
-                break;
+        if (tmpbuf->valid) { // valid bit set
+            if (tmpbuf->refbit) { // refbit set
+                tmpbuf->refbit = false;
+                continue;
+            } else { // refbit not set
+                if (tmpbuf->pinCnt) { // pinCnt set
+                    numPins++;
+                    continue;
+                } else { // pinCnt not set
+                    if (tmpbuf->dirty) { // dirty bit set
+                        // flush page to disk
+                        rc = tmpbuf->file->writePage(tmpbuf->pageNo, &(bufPool[clockHand]));
+                        if (rc != OK) {
+                            return UNIXERR;
+                        }
+                    } 
+                    // invoke set on frame whether or not dirty bit is set
+                    hashTable->remove(tmpbuf->file, tmpbuf->pageNo);
+                    frame = tmpbuf->frameNo;
+                    return OK;
+                }
             }
-            numPins++;
-            continue;
-        }
-
-        tmpbuf->refbit = false;
-    }
-
-    cout << "pins: " << numPins << "bufs: " << numBufs << "\n";
-    // Checking if all pages are pinned
-    if (numPins >= numBufs) {
-        return BUFFEREXCEEDED;
-    }
-
-    // If page to be replaced is valid, remove entry from hash table
-    // If dirty, flush to disk
-    if (tmpbuf->valid) {
-        rc = hashTable->remove(tmpbuf->file, tmpbuf->pageNo);
-        if (rc != OK) {
-            return rc;
-        }
-
-        if (tmpbuf->dirty) {
-            rc = tmpbuf->file->writePage(tmpbuf->pageNo, &(bufPool[clockHand]));
-            if (rc != OK) {
-                return UNIXERR;
-            }
+        } else { // valid bit not set
+            frame = tmpbuf->frameNo;
+            return OK;
         }
     }
-
-    frame = tmpbuf->frameNo;
-    return OK;
+    return BUFFEREXCEEDED;
 }
+
 
 /**
  * @brief Reads a page from disk into the buffer pool.
