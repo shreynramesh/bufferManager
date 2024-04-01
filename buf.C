@@ -1,12 +1,19 @@
+/**
+ * Authors:
+ *   - Nikhil Kagalwala (kagalwala)
+ *   - Shrey Ramesh (snramesh)
+ * Description: Implementation of the Buffer Manager class. The BufMgr class manages a buffer pool used 
+ * for caching disk pages in memory. It has methods to allocate, read, write, dispose, and flush pages.
+ * It uses the clock algorithm for buffer frame replacement and uses a hash table for efficient page lookup
+ **/
+
 #include <errno.h>
 #include <fcntl.h>
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
 #include <iostream>
-
 #include "buf.h"
 #include "page.h"
 
@@ -23,7 +30,11 @@
 //----------------------------------------
 // Constructor of the class BufMgr
 //----------------------------------------
-
+/**
+ * @brief Constructor for the Buffer Manager class.
+ * 
+ * @param numBuffers The number of buffer frames in the buffer pool.
+ */
 BufMgr::BufMgr(const int bufs) {
     numBufs = bufs;
 
@@ -43,6 +54,11 @@ BufMgr::BufMgr(const int bufs) {
     clockHand = bufs - 1;
 }
 
+/**
+ * @brief Destructor for the Buffer Manager class.
+ * 
+ * Cleans up allocated memory and flushes dirty pages to disk.
+ */
 BufMgr::~BufMgr() {
     // flush out all unwritten pages
     for (int i = 0; i < numBufs; i++) {
@@ -60,22 +76,6 @@ BufMgr::~BufMgr() {
     delete[] bufTable;
     delete[] bufPool;
 }
-
-/**
- * @brief Allocates a free buffer frame using the clock algorithm.
- *
- * This method allocates a free buffer frame using the clock algorithm. If necessary,
- * it writes a dirty page back to disk before allocating the frame.
- *
- * If the buffer frame allocated has a valid page in it, the appropriate
- * entry is removed from the hash table.
- *
- * @param[out] frame An integer reference parameter where the index of the allocated
- *                   buffer frame will be stored.
- * @return Status BUFFEREXCEEDED if all buffer frames are pinned, UNIXERR if an error
- *         occurred during disk I/O, and OK otherwise.
- */
-
 
 /**
  * @brief Allocates a free buffer frame using the clock algorithm.
@@ -133,7 +133,6 @@ const Status BufMgr::allocBuf(int & frame) {
     }
     return BUFFEREXCEEDED;
 }
-
 
 /**
  * @brief Reads a page from disk into the buffer pool.
@@ -217,8 +216,7 @@ const Status BufMgr::readPage(File* file, const int PageNo, Page*& page) {
  * @return Status OK if no errors occurred, HASHNOTFOUND if the page is not in
  *         the buffer pool hash table, PAGENOTPINNED if the pin count is already 0.
  */
-const Status BufMgr::unPinPage(File* file, const int PageNo,
-                               const bool dirty) {
+const Status BufMgr::unPinPage(File* file, const int PageNo, const bool dirty) {
     Status rc;
     int frameno;
     rc = hashTable->lookup(file, PageNo, frameno);
@@ -273,6 +271,13 @@ const Status BufMgr::allocPage(File* file, int& pageNo, Page*& page) {
     return OK;
 }
 
+/**
+ * @brief Disposes a page from the file and removes it from the buffer pool.
+ * 
+ * @param file A pointer to the file containing the page.
+ * @param pageNo The number of the page to dispose.
+ * @return Status OK if no errors occurred, or an appropriate error code otherwise.
+ */
 const Status BufMgr::disposePage(File* file, const int pageNo) {
     // see if it is in the buffer pool
     Status status = OK;
@@ -288,6 +293,12 @@ const Status BufMgr::disposePage(File* file, const int pageNo) {
     return file->disposePage(pageNo);
 }
 
+/**
+ * @brief Flushes all pages belonging to a file from the buffer pool to disk.
+ * 
+ * @param file A pointer to the file whose pages need to be flushed.
+ * @return Status OK if successful, PAGEPINNED if any page is pinned, or an appropriate error code otherwise.
+ */
 const Status BufMgr::flushFile(const File* file) {
     Status status;
 
@@ -323,6 +334,9 @@ const Status BufMgr::flushFile(const File* file) {
     return OK;
 }
 
+/**
+ * @brief Prints the state of the buffer manager.
+ */
 void BufMgr::printSelf(void) {
     BufDesc* tmpbuf;
 
